@@ -26,6 +26,7 @@ static uint16_t s_list_size;
 static Window *s_window;
 static StatusBarLayer *s_status_bar_layer;
 static TextLayer *s_text_layer;
+static TextLayer *s_battery_layer;
 static MenuLayer *s_menu_layer;
 
 static void health_handler(HealthEventType event, void *context) {
@@ -46,6 +47,8 @@ static void health_handler(HealthEventType event, void *context) {
 
             bool sleeping = (data->m & HealthActivitySleep) || (data->m & HealthActivityRestfulSleep);
             text_layer_set_text(s_text_layer, sleeping ? "Asleep" : "Awake");
+
+            logi("heap used %d | heap free %d", heap_bytes_used(), heap_bytes_free());
         } else {
             Data *data = (Data *) linked_list_get(s_list_root, 0);
             free(data);
@@ -103,6 +106,13 @@ static void app_focus_handler(bool in_focus) {
     health_service_events_subscribe(health_handler, NULL);
 }
 
+static void battery_state_handler(BatteryChargeState state) {
+    log_func();
+    static char buf[8];
+    snprintf(buf, sizeof(buf), "%d%%", state.charge_percent);
+    text_layer_set_text(s_battery_layer, buf);
+}
+
 static void window_load(Window *window) {
     log_func();
     Layer *root_layer = window_get_root_layer(window);
@@ -113,11 +123,20 @@ static void window_load(Window *window) {
     status_bar_layer_set_separator_mode(s_status_bar_layer,StatusBarLayerSeparatorModeDotted);
     layer_add_child(root_layer, status_bar_layer_get_layer(s_status_bar_layer));
 
+    char *font_key = preferred_content_size() == PreferredContentSizeMedium ? FONT_KEY_GOTHIC_14 : FONT_KEY_GOTHIC_18;
+
     s_text_layer = text_layer_create(GRect(2, -2, bounds.size.w - 2, STATUS_BAR_LAYER_HEIGHT));
     text_layer_set_text_color(s_text_layer, status_bar_layer_get_foreground_color(s_status_bar_layer));
     text_layer_set_background_color(s_text_layer, GColorClear);
-    text_layer_set_font(s_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
+    text_layer_set_font(s_text_layer, fonts_get_system_font(font_key));
     layer_add_child(root_layer, text_layer_get_layer(s_text_layer));
+
+    s_battery_layer = text_layer_create(GRect(0, -2, bounds.size.w - 2, STATUS_BAR_LAYER_HEIGHT));
+    text_layer_set_text_color(s_battery_layer, status_bar_layer_get_foreground_color(s_status_bar_layer));
+    text_layer_set_background_color(s_battery_layer, GColorClear);
+    text_layer_set_font(s_battery_layer, fonts_get_system_font(font_key));
+    text_layer_set_text_alignment(s_battery_layer, GTextAlignmentRight);
+    layer_add_child(root_layer, text_layer_get_layer(s_battery_layer));
 
     s_menu_layer = menu_layer_create(GRect(0, STATUS_BAR_LAYER_HEIGHT, bounds.size.w, bounds.size.h - STATUS_BAR_LAYER_HEIGHT));
     menu_layer_set_callbacks(s_menu_layer, NULL, (MenuLayerCallbacks) {
@@ -130,13 +149,18 @@ static void window_load(Window *window) {
     app_focus_service_subscribe_handlers((AppFocusHandlers) {
         .did_focus = app_focus_handler
     });
+
+    battery_state_handler(battery_state_service_peek());
+    battery_state_service_subscribe(battery_state_handler);
 }
 
 static void window_unload(Window *window) {
     log_func();
     health_service_events_unsubscribe();
+    battery_state_service_unsubscribe();
 
     menu_layer_destroy(s_menu_layer);
+    text_layer_destroy(s_battery_layer);
     text_layer_destroy(s_text_layer);
     status_bar_layer_destroy(s_status_bar_layer);
 }
