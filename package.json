@@ -2,9 +2,13 @@
   "name": "health-menu",
   "author": "MakeAwesomeHappen",
   "version": "1.0.0",
-  "keywords": ["pebble-app"],
+  "keywords": [
+    "pebble-app"
+  ],
   "private": true,
-  "dependencies": {},
+  "dependencies": {
+    "@smallstoneapps/linked-list": "^1.4.0"
+  },
   "pebble": {
     "displayName": "health-menu",
     "uuid": "7dcc2b71-caa3-4bf5-a78c-ad6178b9396a",
@@ -20,10 +24,9 @@
       "watchface": false
     },
     "capabilities": [
-        "health"
+      "health"
     ],
-    "messageKeys": [
-    ],
+    "messageKeys": [],
     "resources": {
       "media": []
     }
