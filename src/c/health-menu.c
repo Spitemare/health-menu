@@ -75,6 +75,34 @@ static void menu_draw_row_callback(GContext *ctx, const Layer *this, MenuIndex *
     menu_cell_basic_draw(ctx, this, title, subtitle, NULL);
 }
 
+static bool health_activity_iterator_callback(HealthActivity activity, time_t start, time_t end, void *context) {
+    log_func();
+    Data *data = malloc(sizeof(Data));
+    data->t = start;
+    data->e = (activity == HealthActivityNone || activity == HealthActivityWalk || activity == HealthActivityRun) ? HealthEventMovementUpdate : HealthEventSleepUpdate;
+    data->m = activity;
+    linked_list_append(s_list_root, data);
+    s_list_size += 1;
+
+    return true;
+}
+
+static void app_focus_handler(bool in_focus) {
+    log_func();
+    app_focus_service_unsubscribe();
+
+    time_t end = time(NULL);
+    time_t start = end - SECONDS_PER_HOUR;
+    health_service_activities_iterate(HealthActivityMaskAll, start, end, HealthIterationDirectionFuture, health_activity_iterator_callback, NULL);
+    menu_layer_reload_data(s_menu_layer);
+    menu_layer_set_selected_index(s_menu_layer, (MenuIndex) {
+        .section = 0,
+        .row = s_list_size
+    }, MenuRowAlignBottom, false);
+
+    health_service_events_subscribe(health_handler, NULL);
+}
+
 static void window_load(Window *window) {
     log_func();
     Layer *root_layer = window_get_root_layer(window);
@@ -99,7 +127,9 @@ static void window_load(Window *window) {
     menu_layer_set_click_config_onto_window(s_menu_layer, window);
     layer_add_child(root_layer, menu_layer_get_layer(s_menu_layer));
 
-    health_service_events_subscribe(health_handler, NULL);
+    app_focus_service_subscribe_handlers((AppFocusHandlers) {
+        .did_focus = app_focus_handler
+    });
 }
 
 static void window_unload(Window *window) {
